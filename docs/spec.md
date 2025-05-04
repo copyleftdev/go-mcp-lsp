@@ -4,7 +4,7 @@ An intent-aware Golang Language Server integrates with MCP to enforce governance
 
 # SUMMARY:
 
-This project creates an enhanced Go language server by forking `gopls` and embedding a Meta-Configuration Protocol (MCP) client. The server enforces organization-defined intents through structural linting, template-driven scaffolding, and interactive MCP tools. Developers interact through LSP features enriched with governed behavior, embedded documentation, and real-time validation. A supporting CLI (`mcplsp`) and reference MCP server complete the ecosystem.
+This project creates an enhanced Go language server by integrating Meta-Configuration Protocol (MCP) capabilities for governance rule enforcement. The server implements deep AST-based code analysis to enforce organization-defined intents through structural linting, pattern detection, and comprehensive code inspection. Developers interact through CLI tools that provide real-time validation against governance rules. The system detects issues related to error handling, API design, concurrency safety, security, and organizational coding standards.
 
 # STEPS:
 
@@ -30,143 +30,199 @@ This project creates an enhanced Go language server by forking `gopls` and embed
 ```
 go-mcp-lsp/
 ├── cmd/
-│   └── mcplsp/
+│   ├── mcplsp/       # CLI tool for MCP validation
+│   └── ast-analyzer/ # CLI for AST-based code analysis
 ├── pkg/
-│   ├── intent/
-│   ├── mechanism/
-│   ├── mcpclient/
-│   └── lsp/
-├── internal/
-│   └── analyzers/
+│   ├── analyzer/     # Deep AST analysis engine
+│   │   └── ast/      # AST-based code inspection
+│   └── mcpclient/    # MCP client for JSON-RPC communication
 ├── server/
-│   └── mcpserver/
+│   └── mcpserver/    # MCP server exposing governance rules
+│       └── rules/    # Rule definitions by category
 ├── testdata/
-├── scripts/
-│   └── audit.sh
+│   ├── error_handling/   # Test files for error handling rules
+│   ├── api_design/       # Test files for API design rules
+│   ├── concurrency/      # Test files for concurrency rules
+│   ├── security/         # Test files for security rules
+│   ├── organization/     # Test files for org standards
+│   └── ast_analysis/     # Test files for AST analyzer
+├── scripts/              # Test and validation scripts
 └── README.md
+```
+
+# ARCHITECTURE:
+
+```mermaid
+flowchart TD
+    IDE[IDE/Editor] -->|LSP Requests| LSRV[Go Language Server]
+    LSRV -->|Validation Requests| MCP[MCP Server]
+    MCP -->|Deep Analysis| AST[AST Analyzer]
+    AST -->|Parse & Analyze| CODE[Go Source Code]
+    MCP -->|Rule Lookup| RULES[Governance Rules]
+    RULES -->|Load| CATS[Rule Categories]
+    CATS -->|Contains| ERR[Error Handling]
+    CATS -->|Contains| API[API Design]
+    CATS -->|Contains| CONC[Concurrency]
+    CATS -->|Contains| SEC[Security]
+    CATS -->|Contains| ORG[Org Standards]
+    CLI[CLI Tool] -->|Direct Analysis| AST
+    CLI -->|Server-based Validation| MCP
 ```
 
 # DETAILED EXPLANATION:
 
-1. `cmd/mcplsp/` – CLI entrypoint for running checks, simulations, audits.
-2. `pkg/intent/` – Contains all YAML/JSON-defined intents and descriptions.
-3. `pkg/mechanism/` – Implements AST/graph analysis, enforcement logic.
-4. `pkg/mcpclient/` – Manages JSON-RPC communication with MCP server.
-5. `pkg/lsp/` – Extends and overrides `gopls` behavior for MCP integration.
-6. `internal/analyzers/` – Encapsulates rule-specific static analysis code.
-7. `server/mcpserver/` – Lightweight MCP server exposing toolchain and rules.
-8. `testdata/` – Real-world Go examples for testing drift and snapshot.
-9. `scripts/audit.sh` – CI-compatible drift reporting and enforcement checker.
-10. `README.md` – Project overview, setup, usage, and contributing instructions.
+1. `cmd/mcplsp/` – CLI tool for validating Go files against governance rules
+2. `cmd/ast-analyzer/` – Dedicated CLI for AST-based code inspection
+3. `pkg/analyzer/` – Implements deep code analysis using Go's AST package
+4. `pkg/analyzer/ast/` – Core AST parsing and inspection logic
+5. `pkg/mcpclient/` – JSON-RPC client for communicating with the MCP server
+6. `server/mcpserver/` – Lightweight JSON-RPC server exposing governance rules
+7. `server/mcpserver/rules/` – Rule definitions organized by category
+8. `testdata/` – Comprehensive test files covering various rule categories
+9. `scripts/` – Testing and validation scripts
+
+# AST-BASED ANALYSIS:
+
+```mermaid
+flowchart LR
+    GO[Go Source] -->|Parse| AST[Abstract Syntax Tree]
+    AST -->|Analyze| ERR[Error Handling Analysis]
+    AST -->|Analyze| API[API Design Analysis]
+    AST -->|Analyze| CONC[Concurrency Analysis]
+    AST -->|Analyze| SEC[Security Analysis]
+    AST -->|Analyze| ORG[Organizational Standards]
+    ERR & API & CONC & SEC & ORG -->|Report| ISSUES[Issue Reports]
+    ISSUES -->|Present| DEV[Developer Feedback]
+```
+
+The AST-based analysis engine provides deep code inspection capabilities:
+
+1. **Error Handling Analysis**: Detects missing error checks, ignored errors, and improper error handling patterns.
+2. **API Design Analysis**: Validates context usage, parameter patterns, and interface design.
+3. **Concurrency Analysis**: Identifies potential race conditions, improper mutex usage, and unsafe map access.
+4. **Security Analysis**: Detects weak cryptography, SQL injection risks, and hardcoded credentials.
+5. **Organizational Standards**: Enforces coding style, dependency injection patterns, and architectural constraints.
 
 # CODE:
 
-### File: `cmd/mcplsp/main.go`
+### File: `pkg/analyzer/ast/analyzer.go`
 
 ```go
-// CLI entrypoint for mcplsp. Supports commands like check, audit, simulate, test.
-package main
+// Core AST analyzer that performs deep code inspection
+package ast
 
 import (
-	"log"
-	"os"
-
-	"github.com/go-mcp-lsp/pkg/mcplsp"
+	"go/ast"
+	"go/parser"
+	"go/token"
 )
 
-func main() {
-	if err := mcplsp.Execute(os.Args[1:]); err != nil {
-		log.Fatal(err)
-	}
+// Issue represents a governance rule violation
+type Issue struct {
+	RuleID      string
+	Description string
+	Severity    string
+	Position    token.Position
 }
+
+// Analyzer performs AST-based code analysis
+type Analyzer struct {
+	fset        *token.FileSet
+	config      AnalyzerConfig
+}
+
+// AnalyzeErrorHandling inspects error handling patterns
+func (a *Analyzer) AnalyzeErrorHandling(file *ast.File) []Issue {
+	// Deep AST-based analysis of error handling patterns
+}
+
+// AnalyzeAPIDesign inspects API design patterns
+func (a *Analyzer) AnalyzeAPIDesign(file *ast.File) []Issue {
+	// Deep AST-based analysis of API design
+}
+
+// Other analysis methods for concurrency, security, etc.
 ```
 
----
-
-### File: `pkg/intent/intents.go`
+### File: `pkg/analyzer/analyzerengine.go`
 
 ```go
-// Loads intent YAMLs into typed structs
-package intent
+// Adapter that integrates the AST analyzer with the MCP server
+package analyzer
 
 import (
-	"os"
-	"gopkg.in/yaml.v3"
+	"github.com/yourorg/go-mcp-lsp/pkg/analyzer/ast"
 )
 
-type Intent struct {
-	ID          string `yaml:"id"`
-	Description string `yaml:"description"`
-	Rationale   string `yaml:"rationale"`
-	Category    string `yaml:"category"`
-	Severity    string `yaml:"severity"`
+// AnalyzerEngine provides a high-level interface for code analysis
+type AnalyzerEngine struct {
+	analyzer *ast.Analyzer
 }
 
-func Load(file string) (*Intent, error) {
-	data, err := os.ReadFile(file)
-	if err != nil {
-		return nil, err
-	}
-	var i Intent
-	if err := yaml.Unmarshal(data, &i); err != nil {
-		return nil, err
-	}
-	return &i, nil
+// Analyze performs comprehensive analysis on a file
+func (e *AnalyzerEngine) Analyze(filepath string, content []byte, ruleIDs []string) (*AnalysisResult, error) {
+	// Coordinate analysis based on requested rules
 }
 ```
 
----
-
-### File: `pkg/mcpclient/client.go`
+### File: `server/mcpserver/server.go`
 
 ```go
-// JSON-RPC 2.0 MCP client for calling remote endpoints
-package mcpclient
+// MCP server implementing the required JSON-RPC methods
+package mcpserver
 
 import (
-	"context"
-	"encoding/json"
-	"net/rpc/jsonrpc"
+	"github.com/yourorg/go-mcp-lsp/pkg/analyzer"
 )
 
-type Request struct {
-	Method string      `json:"method"`
-	Params interface{} `json:"params"`
-}
-
-func Call(endpoint string, method string, params interface{}) (json.RawMessage, error) {
-	conn, err := jsonrpc.Dial("tcp", endpoint)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Close()
-	var result json.RawMessage
-	if err := conn.Call(method, params, &result); err != nil {
-		return nil, err
-	}
-	return result, nil
+// ValidateIntent validates code against specified rules
+func (s *MCPServer) ValidateIntent(req ValidateRequest, result *Result) error {
+	// Use AST-based analyzer for deeper code inspection
+	engine := analyzer.NewAnalyzerEngine()
+	analysisResult, err := engine.Analyze("file.go", []byte(req.Content), req.RuleIDs)
+	
+	// Process analysis results and report issues
 }
 ```
 
----
+# VALIDATION WORKFLOW:
 
-### File: `scripts/audit.sh`
-
-```bash
-#!/bin/bash
-# Run drift check for declared vs enforced intents
-
-set -e
-
-echo "[audit] Checking for enforcement drift..."
-mcplsp audit --intents ./pkg/intent --mechanisms ./pkg/mechanism --output drift-report.json
-
-echo "[audit] Report written to drift-report.json"
+```mermaid
+sequenceDiagram
+    participant Developer
+    participant CLI as CLI Tool
+    participant MCP as MCP Server
+    participant AST as AST Analyzer
+    participant Rules as Rule Definitions
+    
+    Developer->>CLI: mcplsp validate file.go
+    CLI->>MCP: ValidateIntent(file.go)
+    MCP->>Rules: Load applicable rules
+    MCP->>AST: Analyze(file, rules)
+    AST->>AST: Parse into AST
+    AST->>AST: Apply rule analyzers
+    AST->>MCP: Return issues
+    MCP->>CLI: Validation results
+    CLI->>Developer: Display issues with locations
 ```
 
----
+# TAKEAWAYS:
 
-### File: `README.md`
+1. Enforces development intent through centrally defined governance.
+2. Performs deep AST-based analysis for accurate issue detection.
+3. Provides precise file location information for identified issues.
+4. Modular architecture allows for easy extension with new rule categories.
+5. Comprehensive testing ensures reliable governance enforcement.
+
+# SUGGESTIONS:
+
+1. Integrate with IDE extensions for real-time feedback.
+2. Add severity-based filtering for validation results.
+3. Implement auto-fix suggestions for common issues.
+4. Extend AST analysis to cover more advanced code patterns.
+5. Add benchmarking to ensure analysis performance on large codebases.
+
+# README:
 
 ````markdown
 # Go MCP Language Server
@@ -227,21 +283,5 @@ go mod tidy
 
 echo "[init] Setup complete."
 ````
-
-# TAKEAWAYS:
-
-1. Enforces development intent through centrally defined governance.
-2. Enhances LSP behavior with real-time rule enforcement.
-3. Treats coding as a verifiable expression of purpose.
-4. Integrates Go analysis with domain-specific rules.
-5. Enables proactive scaffolding and inline documentation.
-
-# SUGGESTIONS:
-
-1. Add WebSocket support for live MCP updates.
-2. Enable fine-grained role-based filtering (e.g., intern vs lead).
-3. Provide VSCode plugin with enhanced MCP UI.
-4. Cache MCP resources locally for offline dev.
-5. Auto-generate intent diff reports on PRs.
 
 Would you like to generate the reference MCP server next?
