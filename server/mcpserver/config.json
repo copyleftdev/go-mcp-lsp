@@ -1,0 +1,6 @@
+{
+  "address": "localhost:9000",
+  "rulesDir": "./rules",
+  "templatesDir": "./templates",
+  "logFile": "mcpserver.log"
+}

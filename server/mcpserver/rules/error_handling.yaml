@@ -1,0 +1,17 @@
+id: error_handling
+description: Ensures proper error handling patterns in Go code
+rationale: Consistent error handling improves code maintainability and reliability
+category: code_quality
+severity: warning
+checks:
+  - name: no_ignored_errors
+    pattern: "if err != nil"
+    ensure: present
+    after: "func.*\\(.*\\).*error"
+  - name: no_underscore_errors
+    pattern: "_ = .*err"
+    ensure: absent
+  - name: propagate_with_context
+    pattern: "return .*fmt\\.Errorf\\(.*: %w\", err\\)"
+    ensure: present
+    after: "if err != nil"

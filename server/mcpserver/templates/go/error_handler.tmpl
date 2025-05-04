@@ -1,0 +1,55 @@
+package {{.PackageName}}
+
+import (
+	"fmt"
+)
+
+type ErrorCode int
+
+const (
+	ErrorUnknown ErrorCode = iota
+	ErrorInvalidInput
+	ErrorNotFound
+	ErrorUnauthorized
+)
+
+type DomainError struct {
+	Code    ErrorCode
+	Message string
+	Err     error
+}
+
+func (e *DomainError) Error() string {
+	if e.Err != nil {
+		return fmt.Sprintf("%s: %v", e.Message, e.Err)
+	}
+	return e.Message
+}
+
+func (e *DomainError) Unwrap() error {
+	return e.Err
+}
+
+func NewInvalidInputError(msg string, err error) *DomainError {
+	return &DomainError{
+		Code:    ErrorInvalidInput,
+		Message: msg,
+		Err:     err,
+	}
+}
+
+func NewNotFoundError(msg string, err error) *DomainError {
+	return &DomainError{
+		Code:    ErrorNotFound,
+		Message: msg,
+		Err:     err,
+	}
+}
+
+func NewUnauthorizedError(msg string, err error) *DomainError {
+	return &DomainError{
+		Code:    ErrorUnauthorized,
+		Message: msg,
+		Err:     err,
+	}
+}

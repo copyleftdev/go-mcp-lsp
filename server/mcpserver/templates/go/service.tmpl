@@ -1,0 +1,40 @@
+package {{.PackageName}}
+
+import (
+	"context"
+	"errors"
+)
+
+type {{.ServiceName}} struct {
+	// Add dependencies here
+}
+
+type {{.ServiceName}}Config struct {
+	// Add configuration here
+}
+
+func New{{.ServiceName}}(cfg {{.ServiceName}}Config) (*{{.ServiceName}}, error) {
+	if err := validateConfig(cfg); err != nil {
+		return nil, err
+	}
+	
+	return &{{.ServiceName}}{
+		// Initialize with config
+	}, nil
+}
+
+func validateConfig(cfg {{.ServiceName}}Config) error {
+	// Add validation here
+	return nil
+}
+
+func (s *{{.ServiceName}}) Execute(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+		// Implementation here
+	}
+	
+	return nil
+}

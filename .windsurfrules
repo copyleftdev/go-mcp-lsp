@@ -1,0 +1,35 @@
+# Project Context
+- This project integrates a Golang-specific Language Server with Meta-Configuration Protocol (MCP) capabilities.
+- Emphasis on modular, maintainable code with minimal over-engineering.
+
+# Development Philosophy
+- Avoid code comments unless absolutely necessary.
+- Prioritize testing with clear intent; tests should reflect the purpose of the code.
+- Consult official documentation before making implementation decisions.
+- Maintain strict adherence to project scope to prevent feature creep.
+
+# Coding Standards
+- Use Go's standard formatting tools (e.g., gofmt) to ensure code consistency.
+- Enforce modular design; each package should have a single, well-defined responsibility.
+- Avoid global variables; prefer dependency injection to manage shared resources.
+
+# AI Behavior Guidelines
+- Do not generate code unless explicitly instructed.
+- Always seek clarification when requirements are ambiguous.
+- Refrain from making assumptions; base suggestions on verified information.
+- Prevent speculative code suggestions; focus on practical, applicable solutions.
+
+# Tooling and Testing
+- Utilize Go's testing framework for all new code.
+- Implement continuous integration to run tests and linters on each commit.
+- Regularly audit dependencies to ensure they align with project standards.
+
+# Security and Compliance
+- Restrict access to sensitive modules; implement role-based permissions.
+- Ensure secure handling of data; comply with organizational data policies.
+- Regularly review and update security protocols to address emerging threats.
+
+# Maintenance and Documentation
+- Maintain clear versioning of all components; document changes comprehensively.
+- Conduct regular audits to ensure compliance with defined rules and standards.
+- Keep documentation concise and relevant; avoid unnecessary elaboration.

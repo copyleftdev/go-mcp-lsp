@@ -1,0 +1,18 @@
+id: api_design
+description: Enforces consistent API design patterns across services
+rationale: Consistent API design improves developer experience and maintainability
+category: architecture
+severity: error
+checks:
+  - name: context_first_param
+    pattern: "func.*\\(ctx context\\.Context"
+    ensure: present
+    target: "func.*\\(.*\\).*"
+  - name: service_interfaces
+    pattern: "type [A-Z][a-zA-Z0-9]+(Service|Repository|Client) interface"
+    ensure: present
+    target: "package .*"
+  - name: config_structs
+    pattern: "type [A-Z][a-zA-Z0-9]+Config struct"
+    ensure: present
+    after: "type [A-Z][a-zA-Z0-9]+(Service|Repository|Client) struct"
