@@ -1,66 +1,102 @@
 #!/bin/bash
-# Test governance rules against our test data
-
 set -e
 
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+# Directory containing this script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-echo "=== Testing Intent-Based Governance Rules ==="
-echo ""
+# Ensure mcplsp is built
+cd "${PROJECT_ROOT}"
+go build -o "${PROJECT_ROOT}/bin/mcplsp" "${PROJECT_ROOT}/cmd/mcplsp/main.go"
 
-test_file() {
-    local file=$1
-    local rule=$2
-    local expected=$3
+# Test directories and their corresponding rules
+declare -A TEST_DIRS=(
+    ["testdata/error_handling"]="error_handling"
+    ["testdata/api_design"]="api_design"
+    ["testdata/concurrency"]="concurrent_map_access"
+    ["testdata/security"]="secure_coding"
+    ["testdata/organization"]="org_coding_standards"
+    ["testdata/ast_analysis"]="error_handling,api_design,concurrent_map_access,secure_coding"
+)
+
+# Test modes
+MODES=("standard" "deep")
+
+# Ensure the MCP server is running
+SERVER_RUNNING=$(ps aux | grep "mcpserver" | grep -v grep | wc -l)
+if [ $SERVER_RUNNING -eq 0 ]; then
+    echo "Starting MCP server..."
+    "${PROJECT_ROOT}/bin/mcpserver" &
+    SERVER_PID=$!
+    # Give the server a moment to start
+    sleep 2
+    echo "MCP server started with PID: $SERVER_PID"
+else
+    echo "MCP server already running"
+fi
+
+TOTAL_TESTS=0
+FAILED_TESTS=0
+PASSED_TESTS=0
+
+for TEST_DIR in "${!TEST_DIRS[@]}"; do
+    RULES="${TEST_DIRS[$TEST_DIR]}"
     
-    echo "Testing $file against rule: $rule"
-    echo "Expected result: $expected"
+    echo "====================================================="
+    echo "Testing directory: ${TEST_DIR}"
+    echo "Rules: ${RULES}"
+    echo "-----------------------------------------------------"
     
-    $PROJECT_ROOT/bin/mcplsp validate "$PROJECT_ROOT/$file" "$rule" > /tmp/validation_result.txt 2>&1
-    exit_code=$?
-    
-    if grep -q "Validation passed" /tmp/validation_result.txt; then
-        if [ "$expected" == "pass" ]; then
-            echo "✅ PASS: File passed validation as expected"
-        else
-            echo "❌ FAIL: File unexpectedly passed validation"
-        fi
+    # Find all Go files in the directory
+    if [ -d "${PROJECT_ROOT}/${TEST_DIR}" ]; then
+        for MODE in "${MODES[@]}"; do
+            echo "Analysis mode: ${MODE}"
+            
+            DEEP_FLAG=""
+            if [ "$MODE" == "deep" ]; then
+                DEEP_FLAG="-deep"
+            fi
+            
+            for TEST_FILE in $(find "${PROJECT_ROOT}/${TEST_DIR}" -name "*.go"); do
+                TOTAL_TESTS=$((TOTAL_TESTS + 1))
+                BASENAME=$(basename "$TEST_FILE")
+                
+                echo "Testing ${BASENAME}..."
+                # Using positional arguments as per CLI design: validate <file> [rule1,rule2,...]
+                if "${PROJECT_ROOT}/bin/mcplsp" ${DEEP_FLAG} validate "${TEST_FILE}" "${RULES}" > /dev/null 2>&1; then
+                    echo "✅ ${BASENAME} passed"
+                    PASSED_TESTS=$((PASSED_TESTS + 1))
+                else
+                    echo "❌ ${BASENAME} failed"
+                    FAILED_TESTS=$((FAILED_TESTS + 1))
+                    
+                    # Show detailed output for failed tests
+                    echo "Detailed output:"
+                    "${PROJECT_ROOT}/bin/mcplsp" ${DEEP_FLAG} validate "${TEST_FILE}" "${RULES}"
+                fi
+            done
+            
+            echo ""
+        done
     else
-        if [ "$expected" == "fail" ]; then
-            echo "✅ PASS: File failed validation as expected"
-            grep -A5 "Validation failed:" /tmp/validation_result.txt || true
-        else
-            echo "❌ FAIL: File unexpectedly failed validation"
-            cat /tmp/validation_result.txt
-        fi
+        echo "Directory ${TEST_DIR} not found, skipping..."
     fi
+    
+    echo "====================================================="
     echo ""
-}
+done
 
-# Error Handling Tests
-echo "=== Error Handling Governance Tests ==="
-test_file "testdata/error_handling/missing_check.go" "error_handling" "fail"
-test_file "testdata/error_handling/proper_check.go" "error_handling" "pass"
+# Kill the server if we started it
+if [ -n "$SERVER_PID" ]; then
+    echo "Stopping MCP server (PID: $SERVER_PID)..."
+    kill $SERVER_PID
+fi
 
-# API Design Tests
-echo "=== API Design Governance Tests ==="
-test_file "testdata/api_design/missing_context.go" "api_design" "fail"
-test_file "testdata/api_design/proper_context.go" "api_design" "pass"
+echo "Governance testing complete"
+echo "Total tests: ${TOTAL_TESTS}"
+echo "Passed: ${PASSED_TESTS}"
+echo "Failed: ${FAILED_TESTS}"
 
-# Concurrency Tests
-echo "=== Concurrency Governance Tests ==="
-test_file "testdata/concurrency/race_condition.go" "concurrent_map_access" "fail"
-test_file "testdata/concurrency/safe_access.go" "concurrent_map_access" "pass"
-
-# Security Tests
-echo "=== Security Governance Tests ==="
-test_file "testdata/security/insecure_practices.go" "secure_coding" "fail"
-test_file "testdata/security/secure_practices.go" "secure_coding" "pass"
-
-# Organization Standards Tests
-echo "=== Organization Standards Tests ==="
-test_file "testdata/organization/non_compliant.go" "org_coding_standards" "fail"
-test_file "testdata/organization/compliant.go" "org_coding_standards" "pass"
-
-echo "=== All Tests Completed ==="
+if [ $FAILED_TESTS -gt 0 ]; then
+    exit 1
+fi

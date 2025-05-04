@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	
+	"github.com/yourorg/go-mcp-lsp/pkg/analyzer"
 )
 
 type MCPServer struct {
@@ -208,157 +210,38 @@ func (s *MCPServer) ValidateIntent(req ValidateRequest, result *Result) error {
 		return nil
 	}
 	
+	// Use AST-based analyzer for deeper code inspection
+	engine := analyzer.NewAnalyzerEngine()
+	analysisResult, err := engine.Analyze("file.go", []byte(req.Content), req.RuleIDs)
+	
+	if err != nil {
+		*result = Result{
+			Success: false,
+			Error:   fmt.Sprintf("analysis failed: %v", err),
+		}
+		return nil
+	}
+	
+	// Map analyzer issues to MCP issues format
 	issues := []map[string]interface{}{}
 	
-	for _, ruleID := range req.RuleIDs {
-		// Handle subdirectory paths in rule IDs
-		rulePath := filepath.Join(s.RulesDir, ruleID+".yaml")
-		ruleActualID := ruleID
-		
-		// If the rule ID contains a path separator, extract the actual rule ID
-		if strings.Contains(ruleID, "/") {
-			parts := strings.Split(ruleID, "/")
-			ruleActualID = parts[len(parts)-1]
+	if analysisResult != nil && len(analysisResult.Issues) > 0 {
+		for _, issue := range analysisResult.Issues {
+			issueMap := map[string]interface{}{
+				"ruleID":      issue.RuleID,
+				"description": issue.Description,
+				"severity":    issue.Severity,
+				"location": map[string]interface{}{
+					"line":   issue.Position.Line,
+					"column": issue.Position.Column,
+				},
+			}
+			issues = append(issues, issueMap)
 		}
-		
-		if _, err := os.Stat(rulePath); err != nil {
-			// Try to find the rule in subdirectories
-			found := false
-			categories := []string{"error_handling", "api_design", "concurrency", "security", "organization"}
-			
-			for _, category := range categories {
-				categoryRulePath := filepath.Join(s.RulesDir, category, ruleActualID+".yaml")
-				if _, err := os.Stat(categoryRulePath); err == nil {
-					rulePath = categoryRulePath
-					found = true
-					break
-				}
-			}
-			
-			if !found {
-				issues = append(issues, map[string]interface{}{
-					"ruleID":      ruleID,
-					"description": "Rule definition not found",
-					"severity":    "error",
-				})
-				continue
-			}
-		}
-		
-		// Basic validation based on the rule ID
-		switch ruleActualID {
-		case "error_handling":
-			// Check for error handling patterns
-			if strings.Contains(req.Content, "err :=") || strings.Contains(req.Content, "err =") {
-				if !strings.Contains(req.Content, "if err != nil") {
-					issues = append(issues, map[string]interface{}{
-						"ruleID":      "error_handling",
-						"description": "Missing error handling pattern 'if err != nil'",
-						"severity":    "warning",
-					})
-				}
-			}
-			
-			// Check for ignored errors
-			if strings.Contains(req.Content, "_ =") && strings.Contains(req.Content, "err") {
-				issues = append(issues, map[string]interface{}{
-					"ruleID":      "error_handling",
-					"description": "Error is being ignored with underscore assignment",
-					"severity":    "error",
-				})
-			}
-			
-		case "api_design":
-			// Check for context parameter
-			if strings.Contains(req.Content, "func ") && 
-				strings.Contains(req.Content, "(*") && 
-				!strings.Contains(req.Content, "ctx context.Context") {
-				issues = append(issues, map[string]interface{}{
-					"ruleID":      "api_design",
-					"description": "API methods should accept context.Context as first parameter",
-					"severity":    "warning",
-				})
-			}
-			
-		case "concurrent_map_access", "synchronization":
-			// Check for concurrent map access without synchronization
-			if strings.Contains(req.Content, "go func") &&
-				strings.Contains(req.Content, "map[") &&
-				!strings.Contains(req.Content, "sync.Mutex") &&
-				!strings.Contains(req.Content, "sync.RWMutex") {
-				issues = append(issues, map[string]interface{}{
-					"ruleID":      "concurrent_map_access",
-					"description": "Concurrent map access without proper synchronization",
-					"severity":    "error",
-				})
-			}
-			
-		case "secure_coding":
-			// Check for weak crypto
-			if strings.Contains(req.Content, "crypto/md5") || strings.Contains(req.Content, "crypto/sha1") {
-				issues = append(issues, map[string]interface{}{
-					"ruleID":      "secure_coding",
-					"description": "Using weak cryptographic algorithms (MD5/SHA1)",
-					"severity":    "error",
-				})
-			}
-			
-			// Check for potential SQL injection
-			if strings.Contains(req.Content, "fmt.Sprintf") && 
-				strings.Contains(req.Content, "SELECT") &&
-				strings.Contains(req.Content, "%s") {
-				issues = append(issues, map[string]interface{}{
-					"ruleID":      "secure_coding",
-					"description": "Potential SQL injection vulnerability",
-					"severity":    "error",
-				})
-			}
-			
-			// Check for hardcoded credentials
-			credPatterns := []string{"password :=", "apiKey :=", "secret :=", "token :="}
-			for _, pattern := range credPatterns {
-				if strings.Contains(req.Content, pattern) && 
-					strings.Contains(req.Content, "\"") &&
-					!strings.Contains(req.Content, "os.Getenv") {
-					issues = append(issues, map[string]interface{}{
-						"ruleID":      "secure_coding",
-						"description": "Hardcoded credentials detected",
-						"severity":    "error",
-					})
-					break
-				}
-			}
-			
-		case "coding_standards", "org_coding_standards":
-			// Check for global variables
-			if strings.Contains(req.Content, "var ") &&
-				strings.Contains(req.Content, "Global") {
-				issues = append(issues, map[string]interface{}{
-					"ruleID":      "org_coding_standards",
-					"description": "Global variables violate organizational standards",
-					"severity":    "warning",
-				})
-			}
-			
-			// Check for snake_case function names
-			if strings.Contains(req.Content, "func do_") || strings.Contains(req.Content, "func get_") {
-				issues = append(issues, map[string]interface{}{
-					"ruleID":      "org_coding_standards",
-					"description": "Snake case function names are not allowed",
-					"severity":    "warning",
-				})
-			}
-			
-			// Check for dependency injection patterns
-			if strings.Contains(req.Content, "type Service struct") &&
-				!strings.Contains(req.Content, "Config struct") {
-				issues = append(issues, map[string]interface{}{
-					"ruleID":      "org_coding_standards",
-					"description": "Missing configuration struct for dependency injection",
-					"severity":    "warning",
-				})
-			}
-		}
+	} else {
+		// Fallback to simpler pattern-based checks if AST analysis doesn't find issues
+		// This can help catch issues that might be missed by AST analysis
+		issues = performPatternBasedValidation(req.Content, req.RuleIDs)
 	}
 	
 	*result = Result{
@@ -370,4 +253,138 @@ func (s *MCPServer) ValidateIntent(req ValidateRequest, result *Result) error {
 	}
 	
 	return nil
+}
+
+// performPatternBasedValidation implements the previous string-based validation logic
+// as a fallback mechanism when AST analysis doesn't find any issues
+func performPatternBasedValidation(content string, ruleIDs []string) []map[string]interface{} {
+	issues := []map[string]interface{}{}
+	
+	for _, ruleID := range ruleIDs {
+		// Handle subdirectory paths in rule IDs
+		ruleActualID := ruleID
+		
+		// If the rule ID contains a path separator, extract the actual rule ID
+		if strings.Contains(ruleID, "/") {
+			parts := strings.Split(ruleID, "/")
+			ruleActualID = parts[len(parts)-1]
+		}
+		
+		// Basic validation based on the rule ID
+		switch ruleActualID {
+		case "error_handling":
+			// Check for error handling patterns
+			if strings.Contains(content, "err :=") || strings.Contains(content, "err =") {
+				if !strings.Contains(content, "if err != nil") {
+					issues = append(issues, map[string]interface{}{
+						"ruleID":      "error_handling",
+						"description": "Missing error handling pattern 'if err != nil'",
+						"severity":    "warning",
+					})
+				}
+			}
+			
+			// Check for ignored errors
+			if strings.Contains(content, "_ =") && strings.Contains(content, "err") {
+				issues = append(issues, map[string]interface{}{
+					"ruleID":      "error_handling",
+					"description": "Error is being ignored with underscore assignment",
+					"severity":    "error",
+				})
+			}
+			
+		case "api_design":
+			// Check for context parameter
+			if strings.Contains(content, "func ") && 
+				strings.Contains(content, "(*") && 
+				!strings.Contains(content, "ctx context.Context") {
+				issues = append(issues, map[string]interface{}{
+					"ruleID":      "api_design",
+					"description": "API methods should accept context.Context as first parameter",
+					"severity":    "warning",
+				})
+			}
+			
+		case "concurrent_map_access", "synchronization":
+			// Check for concurrent map access without synchronization
+			if strings.Contains(content, "go func") &&
+				strings.Contains(content, "map[") &&
+				!strings.Contains(content, "sync.Mutex") &&
+				!strings.Contains(content, "sync.RWMutex") {
+				issues = append(issues, map[string]interface{}{
+					"ruleID":      "concurrent_map_access",
+					"description": "Concurrent map access without proper synchronization",
+					"severity":    "error",
+				})
+			}
+			
+		case "secure_coding":
+			// Check for weak crypto
+			if strings.Contains(content, "crypto/md5") || strings.Contains(content, "crypto/sha1") {
+				issues = append(issues, map[string]interface{}{
+					"ruleID":      "secure_coding",
+					"description": "Using weak cryptographic algorithms (MD5/SHA1)",
+					"severity":    "error",
+				})
+			}
+			
+			// Check for potential SQL injection
+			if strings.Contains(content, "fmt.Sprintf") && 
+				strings.Contains(content, "SELECT") &&
+				strings.Contains(content, "%s") {
+				issues = append(issues, map[string]interface{}{
+					"ruleID":      "secure_coding",
+					"description": "Potential SQL injection vulnerability",
+					"severity":    "error",
+				})
+			}
+			
+			// Check for hardcoded credentials
+			credPatterns := []string{"password :=", "apiKey :=", "secret :=", "token :="}
+			for _, pattern := range credPatterns {
+				if strings.Contains(content, pattern) && 
+					strings.Contains(content, "\"") &&
+					!strings.Contains(content, "os.Getenv") {
+					issues = append(issues, map[string]interface{}{
+						"ruleID":      "secure_coding",
+						"description": "Hardcoded credentials detected",
+						"severity":    "error",
+					})
+					break
+				}
+			}
+			
+		case "coding_standards", "org_coding_standards":
+			// Check for global variables
+			if strings.Contains(content, "var ") &&
+				strings.Contains(content, "Global") {
+				issues = append(issues, map[string]interface{}{
+					"ruleID":      "org_coding_standards",
+					"description": "Global variables violate organizational standards",
+					"severity":    "warning",
+				})
+			}
+			
+			// Check for snake_case function names
+			if strings.Contains(content, "func do_") || strings.Contains(content, "func get_") {
+				issues = append(issues, map[string]interface{}{
+					"ruleID":      "org_coding_standards",
+					"description": "Snake case function names are not allowed",
+					"severity":    "warning",
+				})
+			}
+			
+			// Check for dependency injection patterns
+			if strings.Contains(content, "type Service struct") &&
+				!strings.Contains(content, "Config struct") {
+				issues = append(issues, map[string]interface{}{
+					"ruleID":      "org_coding_standards",
+					"description": "Missing configuration struct for dependency injection",
+					"severity":    "warning",
+				})
+			}
+		}
+	}
+	
+	return issues
 }

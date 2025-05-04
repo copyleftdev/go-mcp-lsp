@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/yourorg/go-mcp-lsp/pkg/analyzer"
 	"github.com/yourorg/go-mcp-lsp/pkg/mcpclient"
 )
 
@@ -17,6 +18,7 @@ type cliConfig struct {
 	mechanismsDir string
 	outputFile    string
 	command       string
+	deep          bool
 }
 
 func main() {
@@ -41,6 +43,7 @@ func parseFlags() cliConfig {
 	flag.StringVar(&cfg.rulesDir, "rules", "./pkg/intent", "Path to intent rules")
 	flag.StringVar(&cfg.mechanismsDir, "mechanisms", "./pkg/mechanism", "Path to enforcement mechanisms")
 	flag.StringVar(&cfg.outputFile, "output", "result.json", "Output file for results")
+	flag.BoolVar(&cfg.deep, "deep", false, "Use deep AST-based code inspection (default: false)")
 
 	flag.Parse()
 
@@ -90,21 +93,48 @@ func validateFile(cfg cliConfig) {
 	}
 	
 	fmt.Printf("Validating against rules: %v\n", ruleIDs)
-	result, err := client.ValidateCode(string(content), ruleIDs, "go")
-	if err != nil {
-		log.Fatalf("Validation failed: %v", err)
-	}
-
-	fmt.Printf("Raw validation result: %+v\n", result)
-
-	if result.Valid {
-		fmt.Println("Validation passed!")
-	} else {
-		fmt.Println("Validation failed:")
-		for _, issue := range result.Issues {
-			fmt.Printf("- [%s] %s (Severity: %s)\n", issue.RuleID, issue.Description, issue.Severity)
+	
+	if cfg.deep {
+		// Use AST-based analyzer for deeper inspection
+		fmt.Println("Using deep AST-based code inspection...")
+		
+		engine := analyzer.NewAnalyzerEngine()
+		result, err := engine.Analyze(absPath, content, ruleIDs)
+		if err != nil {
+			log.Fatalf("Analysis failed: %v", err)
 		}
-		os.Exit(1)
+		
+		if result.Valid {
+			fmt.Println("Validation passed!")
+		} else {
+			fmt.Println("Validation failed:")
+			for _, issue := range result.Issues {
+				fmt.Printf("- [%s] %s (Line %d, Col %d) - %s\n", 
+					issue.RuleID, 
+					issue.Description, 
+					issue.Position.Line, 
+					issue.Position.Column,
+					issue.Severity)
+			}
+			os.Exit(1)
+		}
+	} else {
+		result, err := client.ValidateCode(string(content), ruleIDs, "go")
+		if err != nil {
+			log.Fatalf("Validation failed: %v", err)
+		}
+
+		fmt.Printf("Raw validation result: %+v\n", result)
+
+		if result.Valid {
+			fmt.Println("Validation passed!")
+		} else {
+			fmt.Println("Validation failed:")
+			for _, issue := range result.Issues {
+				fmt.Printf("- [%s] %s (Severity: %s)\n", issue.RuleID, issue.Description, issue.Severity)
+			}
+			os.Exit(1)
+		}
 	}
 }
 
