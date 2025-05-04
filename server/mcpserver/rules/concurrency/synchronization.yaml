@@ -1,0 +1,18 @@
+id: concurrent_map_access
+description: Enforces proper synchronization for concurrent map access
+rationale: Concurrent map access without synchronization can lead to race conditions and crashes
+category: concurrency
+severity: error
+checks:
+  - name: unsynchronized_map_access
+    pattern: "map\\[.+?\\].+?=.+?"
+    ensure: absent
+    after: "go func"
+  - name: sync_mutex_required
+    pattern: "sync\\.Mutex|sync\\.RWMutex"
+    ensure: present
+    target: "type .+? struct.+?map\\[.+?\\].+?\\}"
+  - name: concurrent_operations
+    pattern: "defer.+?Done\\(\\).+?\\}.+?go func"
+    ensure: present
+    target: "var wg sync\\.WaitGroup"

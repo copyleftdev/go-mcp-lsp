@@ -1,0 +1,19 @@
+id: secure_coding
+description: Enforces secure coding practices to prevent common vulnerabilities
+rationale: Security vulnerabilities can lead to data breaches and system compromise
+category: security
+severity: error
+checks:
+  - name: no_weak_crypto
+    pattern: "crypto/md5|crypto/sha1"
+    ensure: absent
+  - name: no_sql_injection
+    pattern: "fmt\\.Sprintf.+?SELECT.+?WHERE.+?%s"
+    ensure: absent
+  - name: parametrized_queries
+    pattern: "db\\.(Query|Exec)\\(.+?, .+?\\)"
+    ensure: present
+    after: "SELECT|INSERT|UPDATE|DELETE"
+  - name: no_hardcoded_credentials
+    pattern: "(password|secret|key|token) := \"[A-Za-z0-9_\\-]{8,}\""
+    ensure: absent

@@ -1,0 +1,25 @@
+id: org_coding_standards
+description: Enforces organizational coding standards and architecture patterns
+rationale: Consistent coding standards improve maintainability and reduce technical debt
+category: organization
+severity: warning
+checks:
+  - name: no_global_variables
+    pattern: "var .+? [A-Z]"
+    ensure: absent
+    target: "^package "
+  - name: snake_case_functions_prohibited
+    pattern: "func [a-z]+_[a-z]+"
+    ensure: absent
+  - name: dependency_injection
+    pattern: "type .+?Config struct"
+    ensure: present
+    after: "type .+?Service struct"
+  - name: interface_definitions
+    pattern: "type .+?Interface interface"
+    ensure: present
+    after: "package "
+  - name: parameter_objects
+    pattern: "type .+?Params struct"
+    ensure: present
+    target: "func .+?\\(.+?, .+?, .+?, .+?, .+?\\)"
