@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/yourorg/go-mcp-lsp/pkg/mcpclient"
 )
@@ -47,7 +48,7 @@ func parseFlags() cliConfig {
 	if len(args) < 1 {
 		fmt.Println("Usage: mcplsp [flags] <command>")
 		fmt.Println("Commands:")
-		fmt.Println("  validate <file>  - Validate a Go file against rules")
+		fmt.Println("  validate <file> [rule1,rule2,...] - Validate a Go file against rules")
 		fmt.Println("  audit            - Check for drift between rules and enforcement")
 		fmt.Println("  test             - Test connection to MCP server")
 		os.Exit(1)
@@ -78,8 +79,18 @@ func validateFile(cfg cliConfig) {
 	fmt.Printf("Connecting to MCP server at %s\n", cfg.mcpEndpoint)
 	client := mcpclient.New(cfg.mcpEndpoint)
 	
-	fmt.Printf("Validating against rules: %v\n", []string{"error_handling", "api_design"})
-	result, err := client.ValidateCode(string(content), []string{"error_handling", "api_design"}, "go")
+	// Get rule IDs to validate against
+	ruleIDs := []string{"error_handling", "api_design", "concurrent_map_access", "secure_coding", "org_coding_standards"}
+	if len(flag.Args()) > 2 {
+		// Use specific rules if provided
+		ruleArgs := flag.Args()[2]
+		if ruleArgs != "" {
+			ruleIDs = strings.Split(ruleArgs, ",")
+		}
+	}
+	
+	fmt.Printf("Validating against rules: %v\n", ruleIDs)
+	result, err := client.ValidateCode(string(content), ruleIDs, "go")
 	if err != nil {
 		log.Fatalf("Validation failed: %v", err)
 	}

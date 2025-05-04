@@ -208,23 +208,47 @@ func (s *MCPServer) ValidateIntent(req ValidateRequest, result *Result) error {
 		return nil
 	}
 	
-	// Actual validation logic for the MVP
 	issues := []map[string]interface{}{}
 	
 	for _, ruleID := range req.RuleIDs {
+		// Handle subdirectory paths in rule IDs
 		rulePath := filepath.Join(s.RulesDir, ruleID+".yaml")
-		if _, err := os.Stat(rulePath); err != nil {
-			issues = append(issues, map[string]interface{}{
-				"ruleID":      ruleID,
-				"description": "Rule definition not found",
-				"severity":    "error",
-			})
-			continue
+		ruleActualID := ruleID
+		
+		// If the rule ID contains a path separator, extract the actual rule ID
+		if strings.Contains(ruleID, "/") {
+			parts := strings.Split(ruleID, "/")
+			ruleActualID = parts[len(parts)-1]
 		}
 		
-		// Basic validation for the error_handling rule
-		if ruleID == "error_handling" {
-			// Check if code has potential error variables but missing error handling
+		if _, err := os.Stat(rulePath); err != nil {
+			// Try to find the rule in subdirectories
+			found := false
+			categories := []string{"error_handling", "api_design", "concurrency", "security", "organization"}
+			
+			for _, category := range categories {
+				categoryRulePath := filepath.Join(s.RulesDir, category, ruleActualID+".yaml")
+				if _, err := os.Stat(categoryRulePath); err == nil {
+					rulePath = categoryRulePath
+					found = true
+					break
+				}
+			}
+			
+			if !found {
+				issues = append(issues, map[string]interface{}{
+					"ruleID":      ruleID,
+					"description": "Rule definition not found",
+					"severity":    "error",
+				})
+				continue
+			}
+		}
+		
+		// Basic validation based on the rule ID
+		switch ruleActualID {
+		case "error_handling":
+			// Check for error handling patterns
 			if strings.Contains(req.Content, "err :=") || strings.Contains(req.Content, "err =") {
 				if !strings.Contains(req.Content, "if err != nil") {
 					issues = append(issues, map[string]interface{}{
@@ -235,25 +259,102 @@ func (s *MCPServer) ValidateIntent(req ValidateRequest, result *Result) error {
 				}
 			}
 			
-			// Check for ignored errors using underscore
-			if strings.Contains(req.Content, "_ = ") && strings.Contains(req.Content, "Operation()") {
+			// Check for ignored errors
+			if strings.Contains(req.Content, "_ =") && strings.Contains(req.Content, "err") {
 				issues = append(issues, map[string]interface{}{
 					"ruleID":      "error_handling",
 					"description": "Error is being ignored with underscore assignment",
 					"severity":    "error",
 				})
 			}
-		}
-		
-		// Basic validation for the api_design rule
-		if ruleID == "api_design" {
-			// Check if function has context parameter
+			
+		case "api_design":
+			// Check for context parameter
 			if strings.Contains(req.Content, "func ") && 
 				strings.Contains(req.Content, "(*") && 
 				!strings.Contains(req.Content, "ctx context.Context") {
 				issues = append(issues, map[string]interface{}{
 					"ruleID":      "api_design",
 					"description": "API methods should accept context.Context as first parameter",
+					"severity":    "warning",
+				})
+			}
+			
+		case "concurrent_map_access", "synchronization":
+			// Check for concurrent map access without synchronization
+			if strings.Contains(req.Content, "go func") &&
+				strings.Contains(req.Content, "map[") &&
+				!strings.Contains(req.Content, "sync.Mutex") &&
+				!strings.Contains(req.Content, "sync.RWMutex") {
+				issues = append(issues, map[string]interface{}{
+					"ruleID":      "concurrent_map_access",
+					"description": "Concurrent map access without proper synchronization",
+					"severity":    "error",
+				})
+			}
+			
+		case "secure_coding":
+			// Check for weak crypto
+			if strings.Contains(req.Content, "crypto/md5") || strings.Contains(req.Content, "crypto/sha1") {
+				issues = append(issues, map[string]interface{}{
+					"ruleID":      "secure_coding",
+					"description": "Using weak cryptographic algorithms (MD5/SHA1)",
+					"severity":    "error",
+				})
+			}
+			
+			// Check for potential SQL injection
+			if strings.Contains(req.Content, "fmt.Sprintf") && 
+				strings.Contains(req.Content, "SELECT") &&
+				strings.Contains(req.Content, "%s") {
+				issues = append(issues, map[string]interface{}{
+					"ruleID":      "secure_coding",
+					"description": "Potential SQL injection vulnerability",
+					"severity":    "error",
+				})
+			}
+			
+			// Check for hardcoded credentials
+			credPatterns := []string{"password :=", "apiKey :=", "secret :=", "token :="}
+			for _, pattern := range credPatterns {
+				if strings.Contains(req.Content, pattern) && 
+					strings.Contains(req.Content, "\"") &&
+					!strings.Contains(req.Content, "os.Getenv") {
+					issues = append(issues, map[string]interface{}{
+						"ruleID":      "secure_coding",
+						"description": "Hardcoded credentials detected",
+						"severity":    "error",
+					})
+					break
+				}
+			}
+			
+		case "coding_standards", "org_coding_standards":
+			// Check for global variables
+			if strings.Contains(req.Content, "var ") &&
+				strings.Contains(req.Content, "Global") {
+				issues = append(issues, map[string]interface{}{
+					"ruleID":      "org_coding_standards",
+					"description": "Global variables violate organizational standards",
+					"severity":    "warning",
+				})
+			}
+			
+			// Check for snake_case function names
+			if strings.Contains(req.Content, "func do_") || strings.Contains(req.Content, "func get_") {
+				issues = append(issues, map[string]interface{}{
+					"ruleID":      "org_coding_standards",
+					"description": "Snake case function names are not allowed",
+					"severity":    "warning",
+				})
+			}
+			
+			// Check for dependency injection patterns
+			if strings.Contains(req.Content, "type Service struct") &&
+				!strings.Contains(req.Content, "Config struct") {
+				issues = append(issues, map[string]interface{}{
+					"ruleID":      "org_coding_standards",
+					"description": "Missing configuration struct for dependency injection",
 					"severity":    "warning",
 				})
 			}
