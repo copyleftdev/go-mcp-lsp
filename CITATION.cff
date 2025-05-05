@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software in your research, please cite it as below."
+title: "Go-MCP-LSP: A Golang Meta-Configuration Protocol Language Server"
+abstract: "A Go implementation of the Meta-Configuration Protocol (MCP) for language server integration and code governance enforcement through AST-based analysis."
+authors:
+  - family-names: "Go-MCP-LSP Team"
+version: 0.1.0
+date-released: 2025-05-04
+license: MIT
+repository-code: "https://github.com/yourorg/go-mcp-lsp"
+keywords:
+  - "golang"
+  - "static analysis"
+  - "MCP"
+  - "language server"
+  - "AST analysis"
+  - "code governance"

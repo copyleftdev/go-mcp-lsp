@@ -1,0 +1,21 @@
+# Global code owners
+* @yourorg/go-mcp-lsp-maintainers
+
+# Analyzer package owners
+/pkg/analyzer/ @yourorg/analyzer-team
+
+# MCP client owners
+/pkg/mcpclient/ @yourorg/client-team
+
+# Server implementation owners
+/server/ @yourorg/server-team
+
+# Command-line tools owners
+/cmd/ @yourorg/cli-team
+
+# Documentation owners
+*.md @yourorg/docs-team
+/docs/ @yourorg/docs-team
+
+# Test data owners
+/testdata/ @yourorg/testing-team
